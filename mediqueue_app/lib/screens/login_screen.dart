@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../models/user.dart';
-
-import 'package:http/http.dart' as http;
+import '../config/api.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -18,14 +17,32 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscure    = true;
   String? _error;
 
+  @override
+  void initState() {
+    super.initState();
+    print('BASE URL IS: ${ApiConfig.baseUrl}');
+  }
+
  Future<void> _login() async {
   setState(() { _isLoading = true; _error = null; });
+
   try {
-    final res = await http.get(Uri.parse('http://YOUR_IP:5000'));
-    setState(() => _error = 'Response: ${res.statusCode} — ${res.body}');
+    final data = await AuthService.login(
+      email:    _emailController.text.trim(),
+      password: _passwordController.text.trim(),
+    );
+
+    if (data['token'] != null) {
+      final user = UserModel.fromJson(data['user']);
+      await AuthService.saveSession(data['token'], user);
+      if (mounted) Navigator.pushReplacementNamed(context, '/home');
+    } else {
+      setState(() => _error = data['message'] ?? 'Login failed');
+    }
   } catch (e) {
     setState(() => _error = 'Error: $e');
   }
+
   setState(() => _isLoading = false);
 }
 
