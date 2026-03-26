@@ -5,17 +5,11 @@ const QRCode = require('qrcode');
 const Doctor = require('../models/Doctor');
 
 // Create hospital (admin only)
-router.post('/', authMiddleware, async (req, res) => {
+router.post('/', async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Access denied' });
-    }
-
     const { name, address, departments } = req.body;
-
     const hospital = new Hospital({ name, address, departments });
     await hospital.save();
-
     res.status(201).json(hospital);
   } catch (err) {
     res.status(500).json({ message: err.message });

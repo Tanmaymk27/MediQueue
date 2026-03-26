@@ -4,6 +4,7 @@ const cors = require('cors');
 const http = require('http');
 const { Server } = require('socket.io');
 const connectDB = require('./src/config/db');
+const path = require('path');
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -26,6 +27,11 @@ app.use('/api/hospitals',    require('./src/routes/hospitals'));
 app.use('/api/doctors',      require('./src/routes/doctors'));
 app.use('/api/appointments', require('./src/routes/appointments'));
 app.use('/api/queue',        require('./src/routes/queue'));
+
+// Serve index.html at root
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
 // Health check
 app.get('/', (req, res) => res.json({ message: 'MediQueue API running' }));

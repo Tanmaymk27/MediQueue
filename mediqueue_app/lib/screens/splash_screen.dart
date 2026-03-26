@@ -19,10 +19,7 @@ class _SplashScreenState extends State<SplashScreen> {
     await Future.delayed(const Duration(seconds: 2));
     final user = await AuthService.getUser();
     if (mounted) {
-      Navigator.pushReplacementNamed(
-        context,
-        user != null ? '/home' : '/login',
-      );
+      Navigator.pushReplacementNamed(context, '/home');
     }
   }
 

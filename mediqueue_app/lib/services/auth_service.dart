@@ -68,4 +68,40 @@ class AuthService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
   }
+
+  static Future<Map<String, dynamic>> registerHospital({
+  required String hospitalName,
+  required String address,
+  required List<String> departments,
+  required String email,
+  required String phone,
+  required String password,
+}) async {
+  final res = await http.post(
+    Uri.parse('${ApiConfig.baseUrl}/api/auth/register/hospital'),
+    headers: {'Content-Type': 'application/json'},
+    body: jsonEncode({
+      'hospitalName': hospitalName,
+      'address': address,
+      'departments': departments,
+      'email': email,
+      'phone': phone,
+      'password': password,
+    }),
+  );
+  return jsonDecode(res.body);
+}
+
+static Future<Map<String, dynamic>> loginHospital({
+  required String email,
+  required String password,
+}) async {
+  final res = await http.post(
+    Uri.parse('${ApiConfig.baseUrl}/api/auth/login/hospital'),
+    headers: {'Content-Type': 'application/json'},
+    body: jsonEncode({'email': email, 'password': password}),
+  );
+  return jsonDecode(res.body);
+}
+
 }
