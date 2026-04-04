@@ -73,4 +73,71 @@ router.get('/qr/:doctorId', async (req, res) => {
   }
 });
 
+const QRCode = require('qrcode');   // add to top of hospitals.js
+ 
+// PUT /api/hospitals/:id  — edit hospital profile
+router.put('/:id', async (req, res) => {
+  try {
+    const { name, address, departments } = req.body;
+    const update = {};
+    if (name)        update.name        = name;
+    if (address)     update.address     = address;
+    if (departments) update.departments = Array.isArray(departments)
+      ? departments
+      : departments.split(',').map(d => d.trim()).filter(Boolean);
+ 
+    const hospital = await Hospital.findByIdAndUpdate(
+      req.params.id,
+      { $set: update },
+      { new: true, runValidators: true }
+    );
+    if (!hospital) return res.status(404).json({ message: 'Hospital not found' });
+    res.json(hospital);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+ 
+// DELETE /api/hospitals/:id  — remove a hospital and its doctors
+router.delete('/:id', async (req, res) => {
+  try {
+    const hospital = await Hospital.findByIdAndDelete(req.params.id);
+    if (!hospital) return res.status(404).json({ message: 'Hospital not found' });
+ 
+    // Cascade-delete all doctors belonging to this hospital
+    await Doctor.deleteMany({ hospital: req.params.id });
+ 
+    res.json({ message: 'Hospital deleted', id: req.params.id });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+ 
+// GET /api/hospitals/:id/reception-qr
+// Returns a base64 PNG of the hospital-level reception QR code.
+// Patients scan this at the front desk to see all doctors.
+router.get('/:id/reception-qr', async (req, res) => {
+  try {
+    const hospital = await Hospital.findById(req.params.id);
+    if (!hospital) return res.status(404).json({ message: 'Hospital not found' });
+ 
+    const payload = `mediqueue://hospital?id=${req.params.id}`;
+    const qrDataUrl = await QRCode.toDataURL(payload, {
+      width: 400,
+      margin: 2,
+      color: { dark: '#0F172A', light: '#FFFFFF' },
+      errorCorrectionLevel: 'H',
+    });
+ 
+    res.json({
+      hospitalId: req.params.id,
+      hospitalName: hospital.name,
+      payload,
+      qrDataUrl,   // base64 PNG — use directly in <img src="...">
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 module.exports = router;

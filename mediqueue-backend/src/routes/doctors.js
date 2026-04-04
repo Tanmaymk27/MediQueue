@@ -48,4 +48,36 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+router.put('/:id', async (req, res) => {
+  try {
+    const { name, department, avgConsultationTime } = req.body;
+    const update = {};
+    if (name)                update.name                = name;
+    if (department)          update.department          = department;
+    if (avgConsultationTime) update.avgConsultationTime = parseInt(avgConsultationTime);
+ 
+    const doctor = await Doctor.findByIdAndUpdate(
+      req.params.id,
+      { $set: update },
+      { new: true, runValidators: true }
+    ).populate('hospital', 'name');
+ 
+    if (!doctor) return res.status(404).json({ message: 'Doctor not found' });
+    res.json(doctor);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+ 
+// DELETE /api/doctors/:id  — remove a doctor
+router.delete('/:id', async (req, res) => {
+  try {
+    const doctor = await Doctor.findByIdAndDelete(req.params.id);
+    if (!doctor) return res.status(404).json({ message: 'Doctor not found' });
+    res.json({ message: 'Doctor deleted', id: req.params.id });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 module.exports = router;
