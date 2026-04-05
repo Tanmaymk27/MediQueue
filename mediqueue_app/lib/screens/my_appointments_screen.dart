@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/appointment_service.dart';
 import '../models/appointment.dart';
-import 'queue_screen.dart';
+import 'token_screen.dart';
 
 class MyAppointmentsScreen extends StatefulWidget {
   const MyAppointmentsScreen({super.key});
@@ -31,8 +31,8 @@ class _MyAppointmentsScreenState extends State<MyAppointmentsScreen> {
       final data = await AppointmentService.getMyAppointments();
       if (mounted) {
         setState(() {
-          // Sort so newest or currently waiting are at the top
-          _appointments = data.reversed.toList(); 
+          // Filter out completed and cancelled appointments, sort so newest are at the top
+          _appointments = data.where((apt) => apt.status != 'completed' && apt.status != 'cancelled').toList().reversed.toList(); 
           _isLoading = false;
         });
       }
@@ -117,7 +117,7 @@ class _MyAppointmentsScreenState extends State<MyAppointmentsScreen> {
             child: const Icon(Icons.calendar_today_outlined, color: _primary, size: 32),
           ),
           const SizedBox(height: 16),
-          const Text('No appointments yet', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: _ink)),
+          const Text('No upcoming appointments', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: _ink)),
           const SizedBox(height: 6),
           const Text('Book your first appointment to get started', style: TextStyle(fontSize: 13, color: _muted)),
         ],
@@ -201,19 +201,26 @@ class _AppointmentCard extends StatelessWidget {
                 if (!isCompleted)
                   GestureDetector(
                     onTap: () {
-                      // Navigate to queue screen and auto-select this appointment
+                      // Navigate to token screen (QR ticket page)
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => const QueueScreen(isScanned: false),
+                          builder: (context) => TokenScreen(
+                            appointmentId: appointment.id,
+                            doctor: appointment.doctorName,
+                            hospital: appointment.hospitalName,
+                            department: appointment.doctorDepartment,
+                            token: appointment.tokenNumber,
+                            date: appointment.date,
+                          ),
                         ),
                       );
                     },
                     child: Row(
                       children: const [
-                        Text('Track', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _primary)),
+                        Text('View Ticket', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _primary)),
                         SizedBox(width: 3),
-                        Icon(Icons.arrow_forward_rounded, size: 13, color: _primary),
+                        Icon(Icons.qr_code_rounded, size: 13, color: _primary),
                       ],
                     ),
                   ),

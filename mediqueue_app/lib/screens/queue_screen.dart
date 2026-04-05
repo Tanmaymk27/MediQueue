@@ -89,7 +89,8 @@ class _QueueScreenState extends State<QueueScreen> {
           currentToken = data['currentToken'] ?? 0;
           
           final List rawQueue = data['queue'] ?? [];
-          queue = rawQueue.map((item) => {
+          // Filter out completed appointments from the queue display
+          queue = rawQueue.where((item) => item['status'] != 'completed').map((item) => {
             'name': item['patientName'] ?? 'Patient',
             'token': item['tokenNumber'] ?? 0,
           }).toList();
@@ -109,7 +110,8 @@ class _QueueScreenState extends State<QueueScreen> {
             setState(() {
               currentToken = socketData['currentToken'] ?? currentToken;
               final List rawSocketQueue = socketData['queue'] ?? [];
-              queue = rawSocketQueue.map((item) => {
+              // Filter out completed appointments from the queue display
+              queue = rawSocketQueue.where((item) => item['status'] != 'completed').map((item) => {
                 'name': item['patientName'] ?? 'Patient',
                 'token': item['tokenNumber'] ?? 0,
               }).toList();

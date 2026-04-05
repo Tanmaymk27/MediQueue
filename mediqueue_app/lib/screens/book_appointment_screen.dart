@@ -8,6 +8,8 @@ import '../services/hospital_service.dart';
 import '../models/hospital.dart';
 import '../models/doctor.dart';
 import '../services/appointment_service.dart';
+import '../services/auth_service.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 // ─── CONSTANTS ──────────────────────────────────────────────────────────────
 const _primary = Color(0xFF2563EB);
@@ -19,7 +21,7 @@ const _surface = Colors.white;
 const _border = Color(0xFFE8ECFF);
 
 // ─── TOKEN SCREEN ────────────────────────────────────────────────────────────
-class TokenScreen extends StatelessWidget {
+class TokenScreen extends StatefulWidget {
   final String appointmentId;
   final String doctor;
   final String hospital;
@@ -38,12 +40,54 @@ class TokenScreen extends StatelessWidget {
   });
 
   @override
+  State<TokenScreen> createState() => _TokenScreenState();
+}
+
+class _TokenScreenState extends State<TokenScreen> {
+  String _patientName = '';
+  String _patientPhone = '';
+  bool _isLoadingPatient = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPatientInfo();
+  }
+
+  Future<void> _loadPatientInfo() async {
+    try {
+      // Get patient info from auth service
+      final user = await AuthService.getUser();
+      if (mounted) {
+        setState(() {
+          _patientName = user?.name ?? 'Guest';
+          _patientPhone = user?.phone ?? '';
+          _isLoadingPatient = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _patientName = 'Guest';
+          _patientPhone = '';
+          _isLoadingPatient = false;
+        });
+      }
+    }
+  }
+
+  String _generateQrData() {
+    final date = widget.scheduledTime ?? DateTime.now().toIso8601String().split('T')[0];
+    return 'id=${widget.appointmentId}&patient=${_patientName.isNotEmpty ? _patientName : "Guest"}&doctor=${widget.doctor}&hospital=${widget.hospital}&department=${widget.department}&token=${widget.token}&date=$date&phone=${_patientPhone.isNotEmpty ? _patientPhone : ""}';
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final isScheduled = scheduledTime != null;
+    final isScheduled = widget.scheduledTime != null;
     return Scaffold(
       backgroundColor: _bg,
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
           child: Column(
             children: [
@@ -87,7 +131,7 @@ class TokenScreen extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      '#$token',
+                      '#${widget.token}',
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 68,
@@ -97,7 +141,7 @@ class TokenScreen extends StatelessWidget {
                     ),
                     if (isScheduled)
                       Text(
-                        scheduledTime!,
+                        widget.scheduledTime!,
                         style: const TextStyle(
                           color: Colors.white70,
                           fontSize: 14,
@@ -112,7 +156,7 @@ class TokenScreen extends StatelessWidget {
 
               // 🔥 DETAILS CARD — Old UI style
               Container(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(16), // Reduced padding
                 decoration: BoxDecoration(
                   color: _surface,
                   borderRadius: BorderRadius.circular(24),
@@ -126,51 +170,64 @@ class TokenScreen extends StatelessWidget {
                 ),
                 child: Column(
                   children: [
-                    _row('Doctor', doctor, Icons.person_outline_rounded),
-                    const Divider(height: 28, color: Color(0xFFF1F5F9)),
-                    _row('Hospital', hospital, Icons.local_hospital_outlined),
-                    const Divider(height: 28, color: Color(0xFFF1F5F9)),
-                    _row('Department', department, Icons.medical_services_outlined),
+                    _row('Patient', _patientName.isNotEmpty ? _patientName : 'Loading...', Icons.person_outline_rounded),
+                    const Divider(height: 20, color: Color(0xFFF1F5F9)), // Reduced height
+                    _row('Doctor', widget.doctor, Icons.person_outline_rounded),
+                    const Divider(height: 20, color: Color(0xFFF1F5F9)), // Reduced height
+                    _row('Hospital', widget.hospital, Icons.local_hospital_outlined),
+                    const Divider(height: 20, color: Color(0xFFF1F5F9)), // Reduced height
+                    _row('Department', widget.department, Icons.medical_services_outlined),
+                    const Divider(height: 20, color: Color(0xFFF1F5F9)), // Reduced height
+                    _row('Date', widget.scheduledTime ?? 'Not scheduled', Icons.calendar_today_outlined),
+                    const Divider(height: 20, color: Color(0xFFF1F5F9)), // Reduced height
+                    _row('Token', widget.token.toString(), Icons.confirmation_number_outlined),
                   ],
                 ),
               ),
 
-              const SizedBox(height: 24),
+              const SizedBox(height: 16), // Reduced spacing
 
               // 🔥 QR CODE BOX — Old UI style
-              Expanded(
-                child: Container(
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: _surface,
-                    borderRadius: BorderRadius.circular(28),
-                    border: Border.all(color: _primary.withOpacity(0.1)),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.qr_code_2_rounded, size: 140, color: _ink),
-                      const SizedBox(height: 16),
-                      const Text(
-                        'SCAN AT RECEPTION',
-                        style: TextStyle(
-                          color: _muted,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 11,
-                          letterSpacing: 1.5,
-                        ),
+              Container(
+                width: double.infinity,
+                height: 250, // Reduced height
+                decoration: BoxDecoration(
+                  color: _surface,
+                  borderRadius: BorderRadius.circular(28),
+                  border: Border.all(color: _primary.withOpacity(0.1)),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (_patientName.isNotEmpty)
+                      QrImageView(
+                        data: _generateQrData(),
+                        version: QrVersions.auto,
+                        size: 160.0, // Reduced QR code size
+                        backgroundColor: Colors.white,
+                      )
+                    else
+                      const CircularProgressIndicator(),
+                    const SizedBox(height: 12), // Reduced spacing
+                    const Text(
+                      'SCAN AT RECEPTION',
+                      style: TextStyle(
+                        color: _muted,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 11,
+                        letterSpacing: 1.5,
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Data: doctor=$doctor&token=$token',
-                        style: TextStyle(color: _muted.withOpacity(0.4), fontSize: 10),
-                      ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Token: ${widget.token}',
+                      style: TextStyle(color: _muted.withOpacity(0.4), fontSize: 10),
+                    ),
+                  ],
                 ),
               ),
 
-              const SizedBox(height: 24),
+              const SizedBox(height: 16), // Reduced spacing
 
               // 🔥 DONE BUTTON
               SizedBox(
@@ -223,7 +280,9 @@ class TokenScreen extends StatelessWidget {
 
 // ─── BOOK APPOINTMENT SCREEN ─────────────────────────────────────────────────
 class BookAppointmentScreen extends StatefulWidget {
-  const BookAppointmentScreen({super.key});
+  final String? preSelectedHospital;
+
+  const BookAppointmentScreen({super.key, this.preSelectedHospital});
 
   @override
   State<BookAppointmentScreen> createState() => _BookAppointmentScreenState();
@@ -237,6 +296,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
   bool isBooking = false;
   bool _isScheduled = false;
   String? _selectedSlot;
+  String? _pendingPreselectedHospital;
 
   // Real Database Lists
   List<HospitalModel> _hospitalList = [];
@@ -254,6 +314,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
   @override
   void initState() {
     super.initState();
+    _pendingPreselectedHospital = widget.preSelectedHospital;
     _loadHospitals(); // Fetch data from backend
     _animController = AnimationController(
       vsync: this,
@@ -267,8 +328,31 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
     try {
       final hospitals = await HospitalService.getHospitals();
       setState(() => _hospitalList = hospitals);
+      if (_pendingPreselectedHospital != null && _hospitalList.isNotEmpty) {
+        _handlePreSelectedHospital(_pendingPreselectedHospital!);
+        _pendingPreselectedHospital = null;
+      }
     } catch (e) {
       debugPrint("Error loading hospitals: $e");
+    }
+  }
+
+  void _handlePreSelectedHospital(String hospitalName) {
+    // Find the hospital in the list and pre-select it
+    final selectedHospital = _hospitalList.firstWhere(
+      (h) => h.name.toLowerCase() == hospitalName.toLowerCase(),
+      orElse: () => _hospitalList.isNotEmpty ? _hospitalList[0] : throw Exception('No hospitals available'),
+    );
+
+    if (selectedHospital != null) {
+      setState(() {
+        hospital = selectedHospital.name;
+        department = null;
+        doctor = null;
+        _departmentList = [];
+        _doctorList = [];
+      });
+      _loadDepartments(selectedHospital.id);
     }
   }
 
@@ -827,7 +911,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
             hospital: hospital!,
             department: department!,
             token: appointment.tokenNumber,
-            scheduledTime: _isScheduled ? _selectedSlot : null,
+            scheduledTime: appointment.date,
           ),
         ),
       );

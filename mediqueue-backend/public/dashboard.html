@@ -395,9 +395,9 @@
     <div id="d-err" class="alert alert-error" style="display:none;"><span id="d-err-msg"></span></div>
     <div id="d-ok"  class="alert alert-success" style="display:none;"><span id="d-ok-msg"></span></div>
     <div class="fg"><label>Doctor's Name *</label><input id="doc-name" placeholder="e.g. Dr. Sharma"/></div>
-    <div class="fg"><label>Assign to Hospital *</label><select id="doc-hospital"><option value="">Select Hospital...</option></select></div>
+    <div class="fg"><label>Assign to Hospital *</label><select id="doc-hospital" onchange="updateDocDeptOptions()"><option value="">Select Hospital...</option></select></div>
     <div class="g2">
-      <div class="fg"><label>Department *</label><input id="doc-dept" placeholder="e.g. Cardiology"/></div>
+      <div class="fg"><label>Department *</label><select id="doc-dept"><option value="">Select Department...</option></select></div>
       <div class="fg"><label>Avg. Consult Time (mins)</label><input id="doc-time" type="number" value="10" min="1"/></div>
     </div>
     <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:4px;">
@@ -641,6 +641,19 @@
       setTimeout(() => closeModal('modal-add-hospital'), 1200);
     } catch(e) { showA('h-err', 'Server error. Is backend running?'); }
     finally { btn.textContent = 'Create Hospital →'; btn.disabled = false; }
+  }
+  
+  function updateDocDeptOptions() {
+    const hospId = document.getElementById('doc-hospital').value;
+    const deptSel = document.getElementById('doc-dept');
+    deptSel.innerHTML = '<option value="">Select Department...</option>';
+    if (!hospId) return;
+    const hosp = allHospitals.find(h => h._id === hospId);
+    if (hosp && hosp.departments) {
+      hosp.departments.forEach(d => {
+        deptSel.innerHTML += `<option value="${escQ(d)}">${escQ(d)}</option>`;
+      });
+    }
   }
 
   // ── ADD DOCTOR ────────────────────────────────────

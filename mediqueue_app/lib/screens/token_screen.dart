@@ -1,19 +1,61 @@
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import '../services/auth_service.dart';
 
-class TokenScreen extends StatelessWidget {
+class TokenScreen extends StatefulWidget {
+  final String appointmentId;
   final String doctor;
   final String hospital;
   final String department;
   final int token;
+  final String? date;
 
   const TokenScreen({
     super.key,
+    required this.appointmentId,
     required this.doctor,
     required this.hospital,
     required this.department,
     required this.token,
+    this.date,
   });
+
+  @override
+  State<TokenScreen> createState() => _TokenScreenState();
+}
+
+class _TokenScreenState extends State<TokenScreen> {
+  String _patientName = '';
+  String _patientPhone = '';
+  bool _isLoadingPatient = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPatientInfo();
+  }
+
+  Future<void> _loadPatientInfo() async {
+    try {
+      final user = await AuthService.getUser();
+      if (user != null) {
+        setState(() {
+          _patientName = user.name;
+          _patientPhone = user.phone;
+          _isLoadingPatient = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _isLoadingPatient = false;
+      });
+    }
+  }
+
+  String _generateQrData() {
+    final date = widget.date ?? DateTime.now().toIso8601String().split('T')[0];
+    return 'id=${widget.appointmentId}&patient=${_patientName.isNotEmpty ? _patientName : "Guest"}&doctor=${widget.doctor}&hospital=${widget.hospital}&department=${widget.department}&token=${widget.token}&date=$date&phone=${_patientPhone.isNotEmpty ? _patientPhone : ""}';
+  }
 
   static const _bg = Color(0xFFF0F4FF);
   static const _primary = Color(0xFF2563EB);
@@ -133,7 +175,7 @@ class TokenScreen extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               Text(
-                '#$token',
+                '#${widget.token}',
                 style: const TextStyle(
                   fontSize: 56,
                   fontWeight: FontWeight.w800,
@@ -196,11 +238,17 @@ class TokenScreen extends StatelessWidget {
       ),
       child: Column(
         children: [
-          _detailRow(Icons.person_rounded, 'Doctor', doctor),
+          _detailRow(Icons.person_rounded, 'Patient', _patientName.isNotEmpty ? _patientName : 'Loading...'),
           Divider(height: 1, color: Colors.grey.shade100),
-          _detailRow(Icons.local_hospital_rounded, 'Hospital', hospital),
+          _detailRow(Icons.person_rounded, 'Doctor', widget.doctor),
           Divider(height: 1, color: Colors.grey.shade100),
-          _detailRow(Icons.medical_services_rounded, 'Department', department),
+          _detailRow(Icons.local_hospital_rounded, 'Hospital', widget.hospital),
+          Divider(height: 1, color: Colors.grey.shade100),
+          _detailRow(Icons.medical_services_rounded, 'Department', widget.department),
+          Divider(height: 1, color: Colors.grey.shade100),
+          _detailRow(Icons.calendar_today_rounded, 'Date', widget.date ?? 'Not scheduled'),
+          Divider(height: 1, color: Colors.grey.shade100),
+          _detailRow(Icons.confirmation_number_rounded, 'Token', widget.token.toString()),
         ],
       ),
     );
@@ -254,11 +302,14 @@ class TokenScreen extends StatelessWidget {
       ),
       child: Column(
         children: [
-          QrImageView(
-            data: 'doctor=$doctor&hospital=$hospital&token=$token',
-            version: QrVersions.auto,
-            size: 180,
-          ),
+          if (_patientName.isNotEmpty)
+            QrImageView(
+              data: _generateQrData(),
+              version: QrVersions.auto,
+              size: 180,
+            )
+          else
+            const CircularProgressIndicator(),
           const SizedBox(height: 16),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),

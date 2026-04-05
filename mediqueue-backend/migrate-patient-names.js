@@ -17,7 +17,7 @@ async function migratePatientNames() {
         { patientName: '' }
       ]
     });
-
+ 
     console.log(`Found ${appointmentsWithoutName.length} appointments to migrate`);
 
     let updated = 0;

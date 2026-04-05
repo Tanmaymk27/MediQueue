@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:http/http.dart' as http; 
-import 'queue_screen.dart'; 
+import 'package:http/http.dart' as http;
+import 'queue_screen.dart';
+import 'book_appointment_screen.dart';
 import 'dart:convert';
 import '../config/api.dart';
 
@@ -23,6 +24,44 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
   static const _primary = Color(0xFF2563EB);
   static const _ink = Color(0xFF0F172A);
   static const _muted = Color(0xFF64748B);
+
+  // --- QR Code Type Detection ---
+  Map<String, String> _parseQrCodeParameters(String data) {
+    final params = <String, String>{};
+    String normalized = data.trim();
+
+    if (normalized.contains('?')) {
+      normalized = normalized.split('?').last;
+    }
+
+    for (final part in normalized.split('&')) {
+      if (!part.contains('=')) continue;
+      final index = part.indexOf('=');
+      final key = part.substring(0, index).trim().toLowerCase();
+      final value = Uri.decodeComponent(part.substring(index + 1).trim());
+      if (key.isNotEmpty) {
+        params[key] = value;
+      }
+    }
+
+    return params;
+  }
+
+  String _getQrCodeType(String data) {
+    final params = _parseQrCodeParameters(data);
+
+    final hasAppointmentFields = params.containsKey('id') ||
+        params.containsKey('patient') ||
+        params.containsKey('token');
+    final hasDoctorFields = params.containsKey('doctor') && params.containsKey('department');
+    final hasHospitalField = params.containsKey('hospital');
+
+    if (hasAppointmentFields) return 'appointment';
+    if (hasDoctorFields) return 'doctor_cabin';
+    if (hasHospitalField) return 'hospital';
+
+    return 'unknown';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -198,18 +237,30 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
   Widget _buildResultCard() {
     if (scannedData == null) return const SizedBox();
 
-    // Data Extraction Logic
-    final parts = scannedData!.split('&');
-    String doctor = 'Verified';
-    String hospital = 'System';
-    String token = '00';
+    final qrType = _getQrCodeType(scannedData!);
 
-    for (var part in parts) {
-      if (part.startsWith('doctor=')) doctor = part.replaceFirst('doctor=', '');
-      if (part.startsWith('hospital=')) hospital = part.replaceFirst('hospital=', '');
-      if (part.startsWith('token=')) token = part.replaceFirst('token=', '');
+    switch (qrType) {
+      case 'appointment':
+        return _buildAppointmentResultCard();
+      case 'hospital':
+        return _buildHospitalResultCard();
+      case 'doctor_cabin':
+        return _buildDoctorCabinResultCard();
+      default:
+        return _buildUnknownResultCard();
     }
+  }
 
+  Widget _buildAppointmentResultCard() {
+    final params = _parseQrCodeParameters(scannedData!);
+    final id = params['id'] ?? '';
+    final patient = params['patient'] ?? 'Guest';
+    final doctor = params['doctor'] ?? 'Verified';
+    final hospital = params['hospital'] ?? 'System';
+    final department = params['department'] ?? '';
+    final token = params['token'] ?? '00';
+    final date = params['date'] ?? '';
+    final phone = params['phone'] ?? '';
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -234,11 +285,19 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          _resultRow(Icons.person, 'Doctor', doctor),
+          _resultRow(Icons.person, 'Patient', patient),
+          const SizedBox(height: 12),
+          _resultRow(Icons.medical_services, 'Doctor', doctor),
           const SizedBox(height: 12),
           _resultRow(Icons.business_rounded, 'Hospital', hospital),
+          const SizedBox(height: 12),
+          _resultRow(Icons.local_hospital, 'Department', department),
+          const SizedBox(height: 12),
+          _resultRow(Icons.calendar_today, 'Date', date),
+          const SizedBox(height: 12),
+          _resultRow(Icons.phone, 'Phone', phone),
           const SizedBox(height: 24),
-          
+
           Row(
             children: [
               Expanded(
@@ -252,7 +311,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                     elevation: 0,
                   ),
                   onPressed: isUpdatingQueue ? null : () => _handleQueueUpdate(),
-                  child: isUpdatingQueue 
+                  child: isUpdatingQueue
                     ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                     : const Text('Add to Queue', style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
@@ -274,6 +333,155 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     );
   }
 
+  Widget _buildHospitalResultCard() {
+    final params = _parseQrCodeParameters(scannedData!);
+    final hospital = params['hospital'] ?? 'Unknown Hospital';
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 20, offset: const Offset(0, 8)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          const Icon(Icons.local_hospital, size: 48, color: _primary),
+          const SizedBox(height: 16),
+          Text('Hospital Reception', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: _ink)),
+          const SizedBox(height: 8),
+          Text(hospital, style: TextStyle(fontSize: 16, color: _muted)),
+          const SizedBox(height: 24),
+
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    elevation: 0,
+                  ),
+                  onPressed: () => _navigateToBookAppointment(hospital),
+                  child: const Text('Book Appointment', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ),
+              const SizedBox(width: 12),
+              IconButton(
+                onPressed: () => setState(() { scanned = false; scannedData = null; }),
+                icon: const Icon(Icons.refresh_rounded, color: _muted),
+                style: IconButton.styleFrom(
+                  backgroundColor: _bg,
+                  padding: const EdgeInsets.all(12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              )
+            ],
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDoctorCabinResultCard() {
+    final params = _parseQrCodeParameters(scannedData!);
+    final doctor = params['doctor'] ?? 'Unknown Doctor';
+    final department = params['department'] ?? 'Unknown Department';
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 20, offset: const Offset(0, 8)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          const Icon(Icons.medical_services, size: 48, color: _primary),
+          const SizedBox(height: 16),
+          Text('Doctor Cabin', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: _ink)),
+          const SizedBox(height: 8),
+          Text(doctor, style: TextStyle(fontSize: 16, color: _muted)),
+          Text(department, style: TextStyle(fontSize: 14, color: _muted.withOpacity(0.7))),
+          const SizedBox(height: 24),
+
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _primary,
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: _muted.withOpacity(0.2),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    elevation: 0,
+                  ),
+                  onPressed: isUpdatingQueue ? null : () => _handleDoctorCabinQueueUpdate(),
+                  child: isUpdatingQueue
+                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Text('Update Queue', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ),
+              const SizedBox(width: 12),
+              IconButton(
+                onPressed: isUpdatingQueue ? null : () => setState(() { scanned = false; scannedData = null; }),
+                icon: const Icon(Icons.refresh_rounded, color: _muted),
+                style: IconButton.styleFrom(
+                  backgroundColor: _bg,
+                  padding: const EdgeInsets.all(12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              )
+            ],
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUnknownResultCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 20, offset: const Offset(0, 8)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          const Icon(Icons.error_outline, size: 48, color: Colors.orange),
+          const SizedBox(height: 16),
+          const Text('Unknown QR Code', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: _ink)),
+          const SizedBox(height: 8),
+          const Text('This QR code is not recognized by the system', style: TextStyle(fontSize: 14, color: _muted)),
+          const SizedBox(height: 24),
+
+          IconButton(
+            onPressed: () => setState(() { scanned = false; scannedData = null; }),
+            icon: const Icon(Icons.refresh_rounded, color: _muted),
+            style: IconButton.styleFrom(
+              backgroundColor: _bg,
+              padding: const EdgeInsets.all(12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          )
+        ],
+      ),
+    );
+  }
+
   // --- 🔥 UPDATED ASYNC LOGIC WITH REAL HTTP POST ---
   void _handleQueueUpdate() async {
     setState(() => isUpdatingQueue = true);
@@ -283,12 +491,8 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     );
 
     // Re-parse data to get the MongoDB ID
-    final parts = scannedData!.split('&');
-    String appointmentId = '';
-
-    for (var part in parts) {
-      if (part.startsWith('id=')) appointmentId = part.replaceFirst('id=', '');
-    }
+    final params = _parseQrCodeParameters(scannedData!);
+    String appointmentId = params['id'] ?? '';
 
     // Fallback if the QR code is just the raw ID string
     if (!scannedData!.contains('=')) {
@@ -328,6 +532,72 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(backgroundColor: Colors.red, content: Text('Failed to update queue ❌')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => isUpdatingQueue = false);
+    }
+  }
+
+  void _navigateToBookAppointment(String hospitalName) {
+    // Navigate to book appointment screen with pre-selected hospital
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => BookAppointmentScreen(preSelectedHospital: hospitalName),
+      ),
+    );
+  }
+
+  void _handleDoctorCabinQueueUpdate() async {
+    setState(() => isUpdatingQueue = true);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Updating Doctor Queue...'), duration: Duration(milliseconds: 800)),
+    );
+
+    // Parse doctor and department from QR data
+    final params = _parseQrCodeParameters(scannedData!);
+    final doctor = params['doctor'] ?? '';
+    final department = params['department'] ?? '';
+
+    if (doctor.isEmpty || department.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(backgroundColor: Colors.red, content: Text('Invalid doctor cabin QR format.')),
+      );
+      setState(() => isUpdatingQueue = false);
+      return;
+    }
+
+    try {
+      // API call to update doctor cabin queue
+      final response = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/queue/doctor-cabin'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'doctor': doctor,
+          'department': department,
+          'action': 'next_patient'
+        }),
+      );
+
+      if (response.statusCode == 200 && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(backgroundColor: Colors.green, content: Text('Doctor Queue Updated ✅')),
+        );
+
+        // Navigate to queue screen or stay on scanner
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const QueueScreen(isScanned: true))
+        );
+      } else {
+        throw Exception('Failed to update doctor queue: ${response.statusCode}');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(backgroundColor: Colors.red, content: Text('Failed to update doctor queue ❌')),
         );
       }
     } finally {
