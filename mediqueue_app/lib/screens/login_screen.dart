@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../widgets/custom_button.dart';
+import '../services/auth_service.dart';
+import '../models/user.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -15,13 +17,36 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool isLoading = false;
 
-  void _login() {
+  Future<void> _login() async {
+    if (emailController.text.trim().isEmpty || passwordController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please fill all fields')));
+      return;
+    }
+
     setState(() => isLoading = true);
 
-    Future.delayed(const Duration(seconds: 1), () {
-      setState(() => isLoading = false);
-      Navigator.pushReplacementNamed(context, '/home');
-    });
+    try {
+      final res = await AuthService.login(
+        email: emailController.text.trim(),
+        password: passwordController.text.trim(),
+      );
+      
+      if (res['token'] != null) {
+        final user = UserModel.fromJson(res['user']);
+        await AuthService.saveSession(res['token'], user);
+        if (mounted) Navigator.pushReplacementNamed(context, '/home');
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(res['message'] ?? 'Login failed')));
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Server Error. Unable to connect.')));
+      }
+    }
+
+    if (mounted) setState(() => isLoading = false);
   }
 
   @override

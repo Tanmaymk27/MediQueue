@@ -7,6 +7,7 @@ import '../config/api.dart';
 import '../services/hospital_service.dart';
 import '../models/hospital.dart';
 import '../models/doctor.dart';
+import '../services/appointment_service.dart';
 
 // ─── CONSTANTS ──────────────────────────────────────────────────────────────
 const _primary = Color(0xFF2563EB);
@@ -243,9 +244,9 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
   List<DoctorModel> _doctorList = [];
 
   // Live Queue Insight Variables
-  int waitingCount = 8;
-  int estimatedTime = 45;
-  int currentServing = 12;
+  int waitingCount = 0;
+  int estimatedTime = 10;
+  int currentServing = 0;
 
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
@@ -286,6 +287,28 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
       setState(() => _doctorList = docs);
     } catch (e) {
       debugPrint("Error loading doctors: $e");
+    }
+  }
+
+  Future<void> _fetchDoctorQueueInfo() async {
+    if (doctor == null) return;
+    try {
+      final dId = _doctorList.firstWhere((d) => d.name == doctor).id;
+      final res = await http.get(Uri.parse('${ApiConfig.baseUrl}/api/queue/$dId'));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        if (mounted) {
+          setState(() {
+            waitingCount = data['waitingCount'] ?? 0;
+            currentServing = data['currentToken'] ?? 0;
+            
+            // Calculate dynamic estimate
+            estimatedTime = (waitingCount > 0) ? waitingCount * 10 : 10;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint("Error fetching queue info: $e");
     }
   }
 
@@ -373,7 +396,10 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
                     doctor,
                     _doctorList.map((d) => d.name).toList(),
                     Icons.person_outlined,
-                    (v) => setState(() => doctor = v),
+                    (v) {
+                      setState(() => doctor = v);
+                      _fetchDoctorQueueInfo();
+                    },
                   ),
 
                   if (doctor != null) ...[
@@ -783,37 +809,28 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
       final hId = _hospitalList.firstWhere((h) => h.name == hospital).id;
       final dId = _doctorList.firstWhere((d) => d.name == doctor).id;
 
-      final response = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/appointments'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'doctor': dId, // Sending ID instead of Name
-          'hospital': hId, // Sending ID instead of Name
-          'department': department!,
-          if (_isScheduled && _selectedSlot != null) 'type': 'normal',
-        }),
+      final appointment = await AppointmentService.bookAppointment(
+        doctorId: dId,
+        hospitalId: hId,
+        department: department!,
+        type: (_isScheduled && _selectedSlot != null) ? 'normal' : 'normal',
       );
 
-if (response.statusCode == 200 || response.statusCode == 201) {
-        final responseData = jsonDecode(response.body); // The backend's response
-        if (!mounted) return;
+      if (!mounted) return;
         
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => TokenScreen(
-              appointmentId: responseData['_id'], // 👈 WE PASS THE MONGODB ID HERE
-              doctor: doctor!,
-              hospital: hospital!,
-              department: department!,
-              token: responseData['tokenNumber'] ?? (DateTime.now().millisecondsSinceEpoch % 1000),
-              scheduledTime: _isScheduled ? _selectedSlot : null,
-            ),
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => TokenScreen(
+            appointmentId: appointment.id,
+            doctor: doctor!,
+            hospital: hospital!,
+            department: department!,
+            token: appointment.tokenNumber,
+            scheduledTime: _isScheduled ? _selectedSlot : null,
           ),
-        );
-      } else {
-        throw Exception('Booking failed: ${response.statusCode}');
-      }
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

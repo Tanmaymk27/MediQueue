@@ -89,7 +89,7 @@ router.post('/login', async (req, res) => {
 // Hospital registration
 router.post('/register/hospital', async (req, res) => {
   try {
-    const {
+    let {
       // Account details
       email,
       password,
@@ -99,6 +99,8 @@ router.post('/register/hospital', async (req, res) => {
       address,
       departments
     } = req.body;
+
+    if (email) email = email.trim().toLowerCase();
 
     // Check if email already exists
     const existing = await User.findOne({ email });
@@ -161,10 +163,11 @@ router.post('/register/hospital', async (req, res) => {
 // Hospital login
 router.post('/login/hospital', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    let { email, password } = req.body;
+    if (email) email = email.trim().toLowerCase();
 
-    const user = await User.findOne({ email, role: 'hospital' });
-    if (!user) {
+    const user = await User.findOne({ email });
+    if (!user || user.role !== 'hospital') {
       return res.status(400).json({ message: 'Invalid credentials' });
     }
 

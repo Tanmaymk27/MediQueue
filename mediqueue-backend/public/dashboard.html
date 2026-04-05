@@ -48,7 +48,6 @@
     .page-title{font-size:22px;font-weight:900;letter-spacing:-0.6px;margin-bottom:4px;}
     .page-sub{font-size:13px;color:var(--muted);margin-bottom:24px;}
     .page-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;}
-    .page-header-text{}
 
     /* CARDS */
     .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px;}
@@ -309,7 +308,10 @@
 
         <div style="flex:1;">
           <div class="card">
-            <div class="card-title" style="margin-bottom:12px;">Select Doctor</div>
+            <div class="card-title" style="margin-bottom:12px;">Select Hospital & Doctor</div>
+            <div style="display:flex;gap:8px;margin-bottom:8px;">
+              <select id="q-hosp-sel" onchange="filterQueueDoctors()" style="flex:1;padding:10px 12px;border:1.5px solid rgba(37,99,235,0.12);border-radius:10px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;"><option value="">-- Select a hospital --</option></select>
+            </div>
             <div style="display:flex;gap:8px;">
               <select id="q-doc-sel" style="flex:1;padding:10px 12px;border:1.5px solid rgba(37,99,235,0.12);border-radius:10px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;"><option value="">-- Select a doctor --</option></select>
               <button class="btn btn-primary btn-sm" onclick="loadQueue()">Load</button>
@@ -505,17 +507,24 @@
 
   // ── SOCKET ────────────────────────────────────────
   function initSocket() {
-    socket = io('http://localhost:5000');
+    socket = io();
     socket.on('connect', () => console.log('Socket connected'));
   }
 
   function subQueue(doctorId) {
-    if (currentDoctorId) { socket.emit('leaveQueue', currentDoctorId); socket.off(`queue:${currentDoctorId}`); }
+    if (currentDoctorId && currentDoctorId !== doctorId) { 
+       socket.emit('leaveQueue', currentDoctorId); 
+       socket.off(`queue:${currentDoctorId}`); 
+    }
+    socket.off(`queue:${doctorId}`); 
+    
+    currentDoctorId = doctorId;
     socket.emit('joinQueue', doctorId);
     socket.on(`queue:${doctorId}`, data => {
       if (data.type === 'NEXT_PATIENT') { setToken(data.currentToken, data.currentPatient); renderQueue(data.queue); setCount(data.waitingCount); }
       if (data.type === 'QUEUE_EMPTY')  { setToken(null, 'Queue empty'); renderQueue([]); setCount(0); }
       if (data.type === 'NEW_APPOINTMENT') loadQueue();
+      if (data.type === 'APPOINTMENT_CANCELLED') loadQueue();
     });
   }
 
@@ -757,12 +766,27 @@
   // ── QUEUE ─────────────────────────────────────────
   async function loadAllDoctorsForQueue() {
     try {
-      const res = await fetch(`${API}/doctors`);
-      allDoctors = await res.json();
-      const sel = document.getElementById('q-doc-sel');
-      sel.innerHTML = '<option value="">-- Select doctor --</option>';
-      allDoctors.forEach(d => sel.innerHTML += `<option value="${d._id}">${d.name} — ${d.department}</option>`);
+      const [hRes, dRes] = await Promise.all([fetch(`${API}/hospitals`), fetch(`${API}/doctors`)]);
+      allHospitals = await hRes.json();
+      allDoctors = await dRes.json();
+
+      const selH = document.getElementById('q-hosp-sel');
+      selH.innerHTML = '<option value="">-- Select hospital --</option>';
+      allHospitals.forEach(h => selH.innerHTML += `<option value="${h._id}">${h.name}</option>`);
+
+      const selD = document.getElementById('q-doc-sel');
+      selD.innerHTML = '<option value="">-- Select doctor --</option>';
     } catch(e) { console.error(e); }
+  }
+
+  function filterQueueDoctors() {
+    const hId = document.getElementById('q-hosp-sel').value;
+    const selD = document.getElementById('q-doc-sel');
+    selD.innerHTML = '<option value="">-- Select doctor --</option>';
+    if (!hId) return;
+
+    const filtered = allDoctors.filter(d => (d.hospital && typeof d.hospital === 'object' ? d.hospital._id : d.hospital) === hId);
+    filtered.forEach(d => selD.innerHTML += `<option value="${d._id}">${d.name} — ${d.department}</option>`);
   }
 
   async function loadQueue() {
@@ -849,7 +873,7 @@
     t.className = 'show' + (danger ? ' toast-danger' : '');
     setTimeout(() => t.className = '', 3000);
   }
-  function escQ(str) { return String(str||'').replace(/'/g,"&apos;").replace(/"/g,"&quot;"); }
+  function escQ(str) { return String(str||'').replace(/'/g,"\\'").replace(/"/g,"&quot;"); }
 </script>
 
 </body>

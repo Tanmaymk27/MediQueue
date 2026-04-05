@@ -534,10 +534,10 @@
       const res  = await fetch(`${API}/auth/login/hospital`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({email, password:pass})});
       const data = await res.json();
       if (!res.ok) { showA('login-err', data.message || 'Invalid credentials'); return; }
-      // Expect { token, hospital: { _id, name, ... } }
+      
       hospitalToken = data.token;
-      hospitalId    = data.hospital._id;
-      hospitalName  = data.hospital.name;
+      hospitalId    = data.user.hospitalId;
+      hospitalName  = data.user.name;
       openDashboard();
     } catch(e) { showA('login-err','Server error. Is backend running?'); }
     finally { btn.textContent = 'Sign In →'; btn.disabled = false; }
@@ -559,7 +559,15 @@
     const btn = document.getElementById('btn-reg');
     btn.textContent = 'Registering...'; btn.disabled = true;
     try {
-      const res  = await fetch(`${API}/hospitals`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name, address:addr, departments:depts, contact:{email, phone}, password:pass})});
+      const payload = {
+        hospitalName: name,
+        address: addr,
+        departments: depts,
+        email: email,
+        phone: phone,
+        password: pass
+      };
+      const res  = await fetch(`${API}/auth/register/hospital`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
       const data = await res.json();
       if (!res.ok) { showA('reg-err', data.message || 'Registration failed'); return; }
       // Auto-login after registration — call login route
@@ -567,8 +575,8 @@
       const lData = await lRes.json();
       if (lRes.ok) {
         hospitalToken = lData.token;
-        hospitalId    = lData.hospital._id;
-        hospitalName  = lData.hospital.name;
+        hospitalId    = lData.user.hospitalId;
+        hospitalName  = lData.user.name;
         openDashboard();
       } else {
         // Registration succeeded but auto-login failed — ask user to sign in
@@ -930,7 +938,7 @@
   function showA(id, msg) { const el=document.getElementById(id); el.style.display='flex'; document.getElementById(`${id}-msg`).textContent=msg; }
   function hideA(id)      { document.getElementById(id).style.display='none'; }
   function toast(msg)     { const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),3000); }
-  function escQ(str)      { return String(str||'').replace(/'/g,"&apos;").replace(/"/g,"&quot;"); }
+  function escQ(str)      { return String(str||'').replace(/'/g,"\\'").replace(/"/g,"&quot;"); }
 </script>
 </body>
 </html>

@@ -15,21 +15,24 @@ router.get('/:doctorId', async (req, res) => {
       doctor: doctorId,
       date: today,
       status: 'serving'
-    }).populate('patient', 'name');
+    });
+
+    let servingPatientName = 'Guest';
+    if (serving) {
+      servingPatientName = serving.patientName || 'Guest';
+    }
 
     const waiting = await Appointment.find({
       doctor: doctorId,
       date: today,
       status: 'waiting'
-    })
-      .populate('patient', 'name phone')
-      .sort([['type', -1], ['tokenNumber', 1]]);
+    }).sort([['type', -1], ['tokenNumber', 1]]);
 
     const queue = waiting.map((apt, index) => ({
       _id: apt._id,
       tokenNumber: apt.tokenNumber,
-      patientName: apt.patient.name,
-      patientPhone: apt.patient.phone,
+      patientName: apt.patientName || 'Guest',
+      patientPhone: apt.patientPhone || '',
       type: apt.type,
       position: index + 1,
       estimatedWaitTime: index * doctor.avgConsultationTime
@@ -39,7 +42,7 @@ router.get('/:doctorId', async (req, res) => {
       doctorId,
       doctorName: doctor.name,
       currentToken: serving ? serving.tokenNumber : null,
-      currentPatient: serving ? serving.patient.name : null,
+      currentPatient: serving ? servingPatientName : null,
       waitingCount: waiting.length,
       queue
     });
@@ -49,11 +52,8 @@ router.get('/:doctorId', async (req, res) => {
   }
 });
 
-router.post('/:doctorId/next', authMiddleware, async (req, res) => {
+router.post('/:doctorId/next', async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Access denied' });
-    }
 
     const today = new Date().toISOString().split('T')[0];
     const { doctorId } = req.params;
@@ -70,9 +70,7 @@ router.post('/:doctorId/next', authMiddleware, async (req, res) => {
       doctor: doctorId,
       date: today,
       status: 'waiting'
-    })
-      .populate('patient', 'name phone')
-      .sort([['type', -1], ['tokenNumber', 1]]);
+    }).sort([['type', -1], ['tokenNumber', 1]]);
 
     const io = req.app.get('io');
 
@@ -91,23 +89,24 @@ router.post('/:doctorId/next', authMiddleware, async (req, res) => {
       doctor: doctorId,
       date: today,
       status: 'waiting'
-    })
-      .populate('patient', 'name phone')
-      .sort([['type', -1], ['tokenNumber', 1]]);
+    }).sort([['type', -1], ['tokenNumber', 1]]);
 
     const queue = waiting.map((apt, index) => ({
       _id: apt._id,
       tokenNumber: apt.tokenNumber,
-      patientName: apt.patient.name,
+      patientName: apt.patientName || 'Guest',
+      patientPhone: apt.patientPhone || '',
       type: apt.type,
       position: index + 1,
       estimatedWaitTime: index * doctor.avgConsultationTime
     }));
 
+    let nextPatientName = nextAppointment.patientName || 'Guest';
+
     const queueUpdate = {
       type: 'NEXT_PATIENT',
       currentToken: nextAppointment.tokenNumber,
-      currentPatient: nextAppointment.patient.name,
+      currentPatient: nextPatientName,
       waitingCount: waiting.length,
       queue
     };
@@ -152,7 +151,6 @@ router.post('/:appointmentId/cancel', authMiddleware, async (req, res) => {
 router.post('/checkin/:appointmentId', async (req, res) => {
   try {
     const appointment = await Appointment.findById(req.params.appointmentId)
-      .populate('patient', 'name phone')
       .populate('doctor', 'name avgConsultationTime');
 
     if (!appointment) {
@@ -165,6 +163,12 @@ router.post('/checkin/:appointmentId', async (req, res) => {
 
     if (appointment.status === 'cancelled') {
       return res.status(400).json({ message: 'Appointment was cancelled' });
+    }
+
+    const User = require('../models/User');
+    let aptPatientName = 'Guest';
+    if (appointment.patient && appointment.patient !== 'guest') {
+       try { const u = await User.findById(appointment.patient); if(u) aptPatientName = u.name; } catch(e){}
     }
 
     const today = new Date().toISOString().split('T')[0];
@@ -185,23 +189,28 @@ router.post('/checkin/:appointmentId', async (req, res) => {
       doctor: doctorId,
       date: today,
       status: 'waiting'
-    })
-      .populate('patient', 'name phone')
-      .sort([['type', -1], ['tokenNumber', 1]]);
+    }).sort([['type', -1], ['tokenNumber', 1]]);
 
-    const queue = waiting.map((apt, index) => ({
-      _id: apt._id,
-      tokenNumber: apt.tokenNumber,
-      patientName: apt.patient.name,
-      type: apt.type,
-      position: index + 1,
-      estimatedWaitTime: index * appointment.doctor.avgConsultationTime
+    const queue = await Promise.all(waiting.map(async (apt, index) => {
+      let pName = 'Guest';
+      let pPhone = '';
+      if (apt.patient && apt.patient !== 'guest') {
+         try { const u = await User.findById(apt.patient); if(u) { pName = u.name; pPhone = u.phone; } } catch(e){}
+      }
+      return {
+        _id: apt._id,
+        tokenNumber: apt.tokenNumber,
+        patientName: pName,
+        type: apt.type,
+        position: index + 1,
+        estimatedWaitTime: index * appointment.doctor.avgConsultationTime
+      };
     }));
 
     const queueUpdate = {
       type: 'NEXT_PATIENT',
       currentToken: appointment.tokenNumber,
-      currentPatient: appointment.patient.name,
+      currentPatient: aptPatientName,
       waitingCount: waiting.length,
       queue
     };

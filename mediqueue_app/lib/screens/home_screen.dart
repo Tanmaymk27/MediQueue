@@ -120,6 +120,13 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           ),
           const Spacer(),
           _LiveBadge(),
+          IconButton(
+            icon: const Icon(Icons.logout_rounded, color: _muted, size: 22),
+            onPressed: () async {
+              await AuthService.logout();
+              if (context.mounted) Navigator.pushReplacementNamed(context, '/login');
+            },
+          ),
         ],
       ),
     );

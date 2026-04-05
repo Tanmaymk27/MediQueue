@@ -24,12 +24,13 @@ class MediQueueApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xFFF5F7FF),
       ),
 
-      // 🚀 START FROM MAIN NAVIGATION
-      home: const MainNavigation(),
+      // 🚀 START FROM SPLASH TO CHECK AUTH
+      home: const SplashScreen(),
 
       routes: {
         '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
+        '/home': (context) => const MainNavigation(),
       },
     );
   }

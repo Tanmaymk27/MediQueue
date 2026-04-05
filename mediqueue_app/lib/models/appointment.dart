@@ -38,9 +38,9 @@ class AppointmentModel {
       status: json['status'] ?? 'waiting',
       date: json['date'],
       estimatedWaitTime: json['estimatedWaitTime'] ?? 0,
-      doctorName: doctor is Map ? doctor['name'] : '',
-      doctorDepartment: doctor is Map ? doctor['department'] : '',
-      hospitalName: hospital is Map ? hospital['name'] : '',
+      doctorName: doctor is Map ? (doctor['name'] ?? '') : '',
+      doctorDepartment: doctor is Map ? (doctor['department'] ?? '') : '',
+      hospitalName: hospital is Map ? (hospital['name'] ?? '') : '',
       tokenQR: json['tokenQR'],
       checkinUrl: json['checkinUrl'],
     );

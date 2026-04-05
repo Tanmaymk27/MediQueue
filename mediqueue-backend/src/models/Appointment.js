@@ -9,6 +9,16 @@ const appointmentSchema = new mongoose.Schema(
       default: "guest"
     },
 
+    patientName: {
+      type: String,
+      default: "Guest"
+    },
+
+    patientPhone: {
+      type: String,
+      default: ""
+    },
+
     doctor: {
       type: String, // was ObjectId ❌
       required: true

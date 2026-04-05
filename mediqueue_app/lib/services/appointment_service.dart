@@ -19,8 +19,8 @@ class AppointmentService {
         'Authorization': 'Bearer $token',
       },
       body: jsonEncode({
-        'doctorId': doctorId,
-        'hospitalId': hospitalId,
+        'doctor': doctorId,
+        'hospital': hospitalId,
         'department': department,
         'type': type,
       }),
@@ -38,7 +38,23 @@ class AppointmentService {
       Uri.parse('${ApiConfig.appointments}/my'),
       headers: {'Authorization': 'Bearer $token'},
     );
-    final List data = jsonDecode(res.body);
-    return data.map((a) => AppointmentModel.fromJson(a)).toList();
+    if (res.statusCode != 200) {
+      print("Failed to fetch appointments. Status: ${res.statusCode}");
+      return [];
+    }
+    try {
+      final List data = jsonDecode(res.body);
+      final List<AppointmentModel> validAppointments = [];
+      for (var a in data) {
+        try {
+          validAppointments.add(AppointmentModel.fromJson(a));
+        } catch (err) {
+          print("Skipping malformed appointment: \$err");
+        }
+      }
+      return validAppointments;
+    } catch (_) {
+      return [];
+    }
   }
 }
